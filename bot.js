@@ -28,7 +28,7 @@ async function handleTelegramMessage(msg) {
     bot.sendMessage(chatId, "⏳ جاري تحضير طلب التلخيص وفاتورة الدفع...");
 
     try {
-        const response = await axios.post(`${VERCEL_SERVER_URL}/api/summarize`, { url: text }, {
+        const response = await axios.post(`${VERCEL_SERVER_URL}/api/app`, { url: text }, {
             headers: { 'x-payment-token': userSessions[chatId]?.invoiceId || '' },
             validateStatus: (status) => status < 500
         });
