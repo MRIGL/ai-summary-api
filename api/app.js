@@ -66,10 +66,12 @@ app.post('/api/app', async (req, res) => {
 
     } catch (err) {
         const errorDetail = err.response ? JSON.stringify(err.response.data) : err.message;
+        const keyPreview = SWISS_API_KEY ? SWISS_API_KEY.substring(0, 6) + "..." : "MISSING";
         console.error("Swiss Bitcoin Pay Error:", errorDetail);
-        return res.status(500).json({ error: "Erreur de paiement.", detail: errorDetail });
+        return res.status(500).json({ error: "Erreur de paiement.", detail: errorDetail, keyUsed: keyPreview, status: err.response ? err.response.status : null });
     }
 });
+
 
 app.post('/api/webhook/payment', (req, res) => {
     const { id, status } = req.body;
