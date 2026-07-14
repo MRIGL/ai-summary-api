@@ -46,16 +46,17 @@ app.post('/api/app', async (req, res) => {
     }
 
     try {
-        const swissResponse = await axios.post('https://api.swiss-bitcoin-pay.ch/v1/invoice', {
-            amount: 0.01,
-            currency: "Euro",
-            description: "AI Text Summarization Service"
-        }, {
-            headers: { 'Api-Key': SWISS_API_KEY, 'Content-Type': 'application/json' }
-        });
+        const swissResponse = await axios.post('https://api.swiss-bitcoin-pay.ch/checkout', {
+    amount: 0.01,
+    unit: "EUR",
+    title: "AI Text Summarization Service",
+    description: "Résumé d'article par IA"
+}, {
+    headers: { 'api-key': SWISS_API_KEY, 'Content-Type': 'application/json' }
+});
 
         const invoiceId = swissResponse.data.id;
-        const invoicePr = swissResponse.data.paymentRequest; 
+        const invoicePr = swissResponse.data.pr; 
 
         pendingInvoices[invoiceId] = { paid: false };
 
