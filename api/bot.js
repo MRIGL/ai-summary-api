@@ -2,11 +2,9 @@ const TelegramBot = require('node-telegram-bot-api').default;
 const axios = require('axios');
 
 const TELEGRAM_TOKEN = '8693741936:AAFLrjJ6iEyvysf6wKexVZ4-rmXYfbcBSws';
-const VERCEL_SERVER_URL = 'https://ai-summary-api-eta.vercel.app'; // ⚠️ حطي رابط فيرسيل ديالك هنا
+const VERCEL_SERVER_URL = 'https://ai-summary-api-eta.vercel.app'; 
 
-// 🛑 هنا ردينا البوت يخدم بـ Webhook ماشي Polling
 const bot = new TelegramBot(TELEGRAM_TOKEN);
-
 const userSessions = {};
 
 // دالة لمعالجة الميساجات اللي كتجي من تيليغرام
@@ -44,25 +42,24 @@ async function handleTelegramMessage(msg) {
             await bot.sendMessage(chatId, `📝 **التلخيص:**\n\n${response.data.summary}`, { parse_mode: 'Markdown' });
             delete userSessions[chatId];
         } else {
-            await bot.sendMessage(chatId, "❌ حدث خطأ ما ف السيرفر.");
-        }
+    await bot.sendMessage(chatId, `❌ خطأ: ${JSON.stringify(response.data)}`);
+}
     } catch (error) {
         console.error(error);
         await bot.sendMessage(chatId, "❌ تعذر الاتصال بالسيرفر حالياً.");
     }
 }
 
-// هاد الجزء هو اللي كيخلي Vercel يستقبل الميساج كأنه رابط API
+// 🎯 هاد الجزء تصلح باش يخدم متوافق 100% مع Vercel و node-telegram-bot-api
 module.exports = async (req, res) => {
-    if (req.method === 'POST') {
-        try {
-            const { message } = req.body;
-            if (message) {
-                await handleTelegramMessage(message);
-            }
-        } catch (err) {
-            console.error("Error handling webhook:", err);
-        }
+  try {
+    // نأكدو أن الطلب جاي من تيليغرام وفيه ميساج
+    if (req.body && req.body.message) {
+      await handleTelegramMessage(req.body.message);
     }
-    res.status(200).send('OK');
+    res.status(200).send('OK'); // ديما كنردوا 200 لتيليغرام باش ما يبقاش يعاود يصيفط
+  } catch (error) {
+    console.error('Error handling webhook update:', error);
+    res.status(500).send('Internal Server Error');
+  }
 };
