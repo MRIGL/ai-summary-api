@@ -56,7 +56,9 @@ async function handleLanguageChoice(callbackQuery) {
         const response = await axios.post(`${VERCEL_SERVER_URL}/api/app`, { url: url, lang: lang });
 
         if (response.data && response.data.status === 'success') {
-            await bot.sendMessage(chatId, `التلخيص:\n\n${response.data.summary}`, { parse_mode: 'Markdown' });
+            const { summary, title, domain } = response.data;
+            const message = `📰 *${title}*\n🔗 المصدر: ${domain}\n\n━━━━━━━━━━━━━━\n\n📝 *التلخيص:*\n\n${summary}\n\n━━━━━━━━━━━━━━`;
+            await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
         } else {
             await bot.sendMessage(chatId, `خطأ: ${JSON.stringify(response.data)}`);
         }

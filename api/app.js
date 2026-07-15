@@ -18,6 +18,14 @@ app.post('/api/app', async (req, res) => {
             headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
         });
         const htmlContent = webResponse.data;
+
+        // استخراج العنوان من الـ <title>
+        const titleMatch = htmlContent.match(/<title[^>]*>([^<]+)<\/title>/i);
+        const pageTitle = titleMatch ? titleMatch[1].trim() : "بلا عنوان";
+
+        // استخراج اسم الموقع (domain)
+        const domain = new URL(url).hostname.replace('www.', '');
+
         const plainText = htmlContent.replace(/<[^>]*>/g, ' ').substring(0, 3000);
 
         const aiResponse = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
@@ -32,7 +40,12 @@ app.post('/api/app', async (req, res) => {
 
         const summary = aiResponse.data.choices[0].message.content;
 
-        return res.json({ status: "success", summary: summary });
+        return res.json({
+            status: "success",
+            summary: summary,
+            title: pageTitle,
+            domain: domain
+        });
 
     } catch (error) {
         const errDetail = error.response ? JSON.stringify(error.response.data) : error.message;
