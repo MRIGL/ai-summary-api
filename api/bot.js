@@ -51,7 +51,7 @@ async function handleTelegramMessage(msg) {
 }
     } catch (error) {
         console.error(error);
-        await bot.sendMessage(chatId, "تعذر الاتصال بالسيرفر حالياً.");
+        await bot.sendMessage(chatId, `تعذر الاتصال: ${error.response ? JSON.stringify(error.response.data) : error.message}`);
     }
 }
 
