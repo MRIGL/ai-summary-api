@@ -7,7 +7,7 @@ app.use(express.json());
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 app.post('/api/app', async (req, res) => {
-    const { url } = req.body;
+    const { url, lang } = req.body;
 
     if (!url) {
         return res.status(400).json({ error: "Veuillez fournir l'URL du site." });
@@ -23,7 +23,7 @@ app.post('/api/app', async (req, res) => {
         const aiResponse = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
             model: "llama-3.1-8b-instant",
             messages: [
-                { role: "system", content: "Tu es un assistant IA. Résume ce texte de manière claire en 4 lignes maximum." },
+                { role: "system", content: lang === "ar" ? "أنت مساعد ذكاء اصطناعي. لخص هذا النص بوضوح في 4 أسطر باللغة العربية." : "You are an AI assistant. Summarize this text clearly in 4 lines in English." },
                 { role: "user", content: plainText }
             ]
         }, {
