@@ -41,8 +41,9 @@ async function handleTelegramMessage(msg) {
             await bot.sendMessage(chatId, `التلخيص:\n\n${response.data.summary}`, { parse_mode: 'Markdown' });
             delete userSessions[chatId];
         } else {
-            await bot.sendMessage(chatId, `خطأ: ${JSON.stringify(response.data)}`);
-        }
+    console.log("FULL RESPONSE:", JSON.stringify(response.data));
+    await bot.sendMessage(chatId, `الحالة: ${response.status} - راجع الـ logs`);
+}
     } catch (error) {
         console.error(error);
         await bot.sendMessage(chatId, "تعذر الاتصال بالسيرفر حالياً.");
