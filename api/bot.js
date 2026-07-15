@@ -46,8 +46,7 @@ async function handleTelegramMessage(msg) {
             await bot.sendMessage(chatId, `التلخيص:\n\n${response.data.summary}`, { parse_mode: 'Markdown' });
             delete userSessions[chatId];
         } else {
-    console.log("FULL RESPONSE:", JSON.stringify(response.data));
-    await bot.sendMessage(chatId, `الحالة: ${response.status} - راجع الـ logs`);
+    await bot.sendMessage(chatId, `خطأ: ${JSON.stringify(response.data)}`);
 }
     } catch (error) {
         console.error(error);
