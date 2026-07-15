@@ -33,7 +33,7 @@ app.post('/api/app', async (req, res) => {
         const aiResponse = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
             model: "llama-3.1-8b-instant",
             messages: [
-                { role: "system", content: lang === "ar" ? "أنت مساعد ذكاء اصطناعي. لخص هذا النص بوضوح في 4 أسطر باللغة العربية." : "You are an AI assistant. Summarize this text clearly in 4 lines in English." },
+                { role: "system", content: lang === "ar" ? "لخص هذا النص في 4 أسطر بالضبط باللغة العربية. أعط التلخيص مباشرة بدون أي مقدمة أو عبارات مثل 'هذا ملخص' أو 'فيما يلي'. ابدأ مباشرة بالمحتوى." : "Summarize this text in exactly 4 lines in English. Give the summary directly without any introduction or phrases like 'Here is a summary' or 'Summary:'. Start directly with the content." },
                 { role: "user", content: plainText }
             ]
         }, {
