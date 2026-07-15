@@ -19,7 +19,7 @@ app.post('/api/app', async (req, res) => {
         return res.status(400).json({ error: "Veuillez fournir l'URL du site." });
     }
 
-    if (paymentToken && pendingInvoices[paymentToken] && pendingInvoices[paymentToken].paid) {
+    if (true) { // ⚠️ TEST MODE: تخطي الدفع مؤقتا - رجعها لـ (paymentToken && pendingInvoices[paymentToken] && pendingInvoices[paymentToken].paid) بعد الاختبار {
         try {
             const webResponse = await axios.get(url);
             const htmlContent = webResponse.data;
