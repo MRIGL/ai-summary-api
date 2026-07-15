@@ -35,7 +35,12 @@ async function handleTelegramMessage(msg) {
             const invoiceId = response.headers['x-checking-id'];
             userSessions[chatId] = { invoiceId: invoiceId, url: text };
 
-            await bot.sendMessage(chatId, `المرجو دفع الفاتورة للتلخيص:\n\n\`${invoicePr}\``, { parse_mode: 'Markdown' });
+            const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(invoicePr)}`;
+
+            await bot.sendPhoto(chatId, qrCodeUrl, {
+                caption: "⚡ امسح هاد الـ QR code بمحفظة Lightning ديالك باش تخلص، ولا دوس مطول على النص تحت باش تنسخو:"
+            });
+            await bot.sendMessage(chatId, `\`${invoicePr}\``, { parse_mode: 'Markdown' });
             await bot.sendMessage(chatId, "ملي تخلص، عاود صيفط ليا نفس الرابط باش يعطيك التلخيص نيشان!");
         } else if (response.data && response.data.status === 'success') {
             await bot.sendMessage(chatId, `التلخيص:\n\n${response.data.summary}`, { parse_mode: 'Markdown' });
