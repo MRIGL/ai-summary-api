@@ -1,13 +1,72 @@
 const TelegramBot = require('node-telegram-bot-api').default;
 const axios = require('axios');
 
-const TELEGRAM_TOKEN = '8693741936:AAFLrjJ6iEyvysf6wKexVZ4-rmXYfbcBSws';
+// ⚠️ التوكن لازم يكون ف environment variable، ماشي مكتوب هنا مباشرة
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const VERCEL_SERVER_URL = 'https://ai-summary-api-eta.vercel.app';
 
 const bot = new TelegramBot(TELEGRAM_TOKEN);
-const pendingUrls = {};
-const userSessions = {}; // { chatId: { invoiceId, url, lang } }
-const userStats = {};
+
+// userSessions[chatId] = { url, lang, invoiceId }
+const userSessions = {};
+
+async function requestSummary(chatId) {
+    const session = userSessions[chatId];
+    if (!session || !session.url || !session.lang) return;
+
+    try {
+        const response = await axios.post(
+            `${VERCEL_SERVER_URL}/api/app`,
+            { url: session.url, lang: session.lang },
+            {
+                headers: { 'x-payment-token': session.invoiceId || '' },
+                // 🔑 بدون هاد، axios كيرمي 402 كـ error ومكيوصلش للفرع تاعو تحت
+                validateStatus: (status) => status < 500
+            }
+        );
+
+        if (response.status === 402) {
+            const invoicePr = response.headers['x-invoice'] || response.data.paymentRequest;
+            const invoiceId = response.headers['x-checking-id'] || response.data.invoiceId;
+
+            // إذا كانت هاي أول مرة (ماكانش عندنا invoiceId قبل)، عرض QR وطلب الدفع
+            const isNewInvoice = !session.invoiceId;
+            userSessions[chatId] = { ...session, invoiceId };
+
+            if (isNewInvoice) {
+                const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(invoicePr)}`;
+                await bot.sendPhoto(chatId, qrCodeUrl, {
+                    caption: "⚡ امسح هاد الـ QR code بمحفظة Lightning ديالك باش تخلص، ولا دوس مطول على النص تحت باش تنسخو:"
+                });
+                await bot.sendMessage(chatId, `\`${invoicePr}\``, { parse_mode: 'Markdown' });
+                await bot.sendMessage(chatId, "ملي تخلص، دوس زر ✅ تحقق من الدفع.", {
+                    reply_markup: {
+                        inline_keyboard: [[{ text: "✅ تحقق من الدفع", callback_data: "check_payment" }]]
+                    }
+                });
+            } else {
+                // كان عندنا فاتورة أصلاً وعاود جرب "تحقق" بس لسا ماخلصاتش
+                await bot.sendMessage(chatId, "الفاتورة مازالت ماخلصاتش. خلص الأول من محفظة Lightning ديالك، وبعدين دوس تحقق.", {
+                    reply_markup: {
+                        inline_keyboard: [[{ text: "✅ تحقق من الدفع", callback_data: "check_payment" }]]
+                    }
+                });
+            }
+        } else if (response.status === 410) {
+            await bot.sendMessage(chatId, "الفاتورة صلاحيتها خلصات. صيفط الرابط ديال المقال مرة أخرى باش نديرو وحدة جديدة.");
+            delete userSessions[chatId];
+        } else if (response.data && response.data.status === 'success') {
+            await bot.sendMessage(chatId, `التلخيص:\n\n${response.data.summary}`, { parse_mode: 'Markdown' });
+            delete userSessions[chatId];
+        } else {
+            console.log("FULL RESPONSE:", JSON.stringify(response.data));
+            await bot.sendMessage(chatId, `الحالة: ${response.status} - راجع الـ logs`);
+        }
+    } catch (error) {
+        console.error(error);
+        await bot.sendMessage(chatId, "تعذر الاتصال بالسيرفر حالياً.");
+    }
+}
 
 async function handleTelegramMessage(msg) {
     const chatId = msg.chat.id;
@@ -16,166 +75,58 @@ async function handleTelegramMessage(msg) {
     if (!text) return;
 
     if (text.startsWith('/start')) {
-        return bot.sendMessage(chatId,
-            "🤖 *Summarize AI Bot*\n" +
-            "━━━━━━━━━━━━━━\n\n" +
-            "مرحباً بك! 👋\n" +
-            "صيفط ليا رابط ديال أي مقال وغادي نلخصو ليك ف الحين بالذكاء الاصطناعي.\n\n" +
-            "📌 استعمل /help باش تعرف كيفاش تخدم البوت\n" +
-            "ℹ️ استعمل /about باش تعرف كثر على البوت",
-            { parse_mode: 'Markdown' }
-        );
+        return bot.sendMessage(chatId, "مرحباً بك! صيفط ليا رابط ديال أي مقال وغادي نلخصو ليك ف الحين بالذكاء الاصطناعي.");
     }
 
-    if (text.startsWith('/help')) {
-        return bot.sendMessage(chatId,
-            "📖 *كيفاش تستعمل البوت:*\n\n" +
-            "1️⃣ صيفط رابط ديال أي مقال إخباري\n" +
-            "2️⃣ اختار اللغة اللي بغيتي التلخيص بيها\n" +
-            "3️⃣ خلص الفاتورة (Lightning) باش توصلك التلخيص\n\n" +
-            "⚡ سريع، دقيق، ومدفوع.",
-            { parse_mode: 'Markdown' }
-        );
-    }
-
-    if (text.startsWith('/about')) {
-        return bot.sendMessage(chatId,
-            "ℹ️ *عن البوت*\n\n" +
-            "بوت ذكي كيلخص المقالات باستعمال الذكاء الاصطناعي (Groq AI).\n\n" +
-            "🔧 مبني بـ Node.js\n" +
-            "☁️ مستضاف على Vercel\n" +
-            "⚡ الدفع عبر Bitcoin Lightning",
-            { parse_mode: 'Markdown' }
-        );
-    }
-
-    const urlRegex = /^(https?:\/\/[^\s]+)/g;
+    const urlRegex = /^(https?:\/\/[^\s]+)/;
     if (!urlRegex.test(text)) {
-        return bot.sendMessage(chatId, "⚠️ المرجو إرسال رابط صحيح (URL) للمقال.");
+        return bot.sendMessage(chatId, "المرجو إرسال رابط صحيح (URL) للمقال.");
     }
 
-    pendingUrls[chatId] = text;
+    // خزّن الرابط وسولو على اللغة (فاتورة جديدة كل مرة، بلا invoiceId قديم)
+    userSessions[chatId] = { url: text, lang: null, invoiceId: null };
 
-    await bot.sendMessage(chatId, "🌐 بأي لغة بغيتي التلخيص؟", {
+    return bot.sendMessage(chatId, "بأي لغة بغيتي التلخيص؟", {
         reply_markup: {
-            inline_keyboard: [
-                [
-                    { text: "🇸🇦 العربية", callback_data: "lang_ar" },
-                    { text: "🇬🇧 English", callback_data: "lang_en" }
-                ]
-            ]
+            inline_keyboard: [[
+                { text: "🇸🇦 العربية", callback_data: "lang_ar" },
+                { text: "🇬🇧 English", callback_data: "lang_en" }
+            ]]
         }
     });
 }
 
-async function requestSummary(chatId, url, lang, statusMsgId) {
-    try {
-        const response = await axios.post(`${VERCEL_SERVER_URL}/api/app`, { url, lang }, {
-            headers: { 'x-payment-token': userSessions[chatId]?.invoiceId || '' },
-            validateStatus: (status) => status < 500
-        });
+async function handleCallbackQuery(query) {
+    const chatId = query.message.chat.id;
+    const data = query.data;
 
-        if (response.status === 402) {
-            const invoicePr = response.headers['x-invoice'];
-            const invoiceId = response.headers['x-checking-id'];
-            userSessions[chatId] = { invoiceId, url, lang };
+    bot.answerCallbackQuery(query.id).catch(() => {});
 
-            const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(invoicePr)}`;
-
-            await bot.deleteMessage(chatId, statusMsgId);
-            await bot.sendPhoto(chatId, qrCodeUrl, {
-                caption: "⚡ امسح هاد الـ QR code بمحفظة Lightning ديالك باش تخلص.\n\n🔄 ملي تخلص، عاود صيفط ليا نفس الرابط باش يعطيك التلخيص نيشان!"
-            });
-            return;
+    if (data === 'lang_ar' || data === 'lang_en') {
+        const session = userSessions[chatId];
+        if (!session || !session.url) {
+            return bot.sendMessage(chatId, "صيفط ليا رابط المقال باش نبدأو.");
         }
-
-        if (response.data && response.data.status === 'success') {
-            const { summary, title, domain, readingTimeMin, compressionRate } = response.data;
-
-            userStats[chatId] = (userStats[chatId] || 0) + 1;
-            const articleNumber = userStats[chatId];
-
-            const now = new Date();
-            const dateStr = now.toLocaleDateString('ar-MA', { day: 'numeric', month: 'long', year: 'numeric' });
-            const timeStr = now.toLocaleTimeString('ar-MA', { hour: '2-digit', minute: '2-digit' });
-
-            const message =
-                `📰 *${title}*\n` +
-                `🔗 المصدر: ${domain}\n` +
-                `⏱️ وقت القراءة الأصلي: ~${readingTimeMin} دقيقة\n\n` +
-                `━━━━━━━━━━━━━━\n\n` +
-                `📝 *التلخيص:*\n\n${summary}\n\n` +
-                `━━━━━━━━━━━━━━\n\n` +
-                `📊 نسبة الاختصار: ${compressionRate}%\n` +
-                `📈 هذا هو المقال رقم ${articleNumber} اللي لخصت ليك\n` +
-                `🕐 ${dateStr} - ${timeStr}\n\n` +
-                `⚡ Powered by Summarize AI Bot`;
-
-            delete userSessions[chatId];
-            await bot.deleteMessage(chatId, statusMsgId);
-            await bot.sendMessage(chatId, message, {
-                parse_mode: 'Markdown',
-                reply_markup: {
-                    inline_keyboard: [
-                        [{ text: "🔗 افتح المقال الأصلي", url: url }],
-                        [{ text: "📄 لخص رابط آخر", callback_data: "new_summary" }]
-                    ]
-                }
-            });
-        } else {
-            await bot.editMessageText(`❌ خطأ: ${JSON.stringify(response.data)}`, {
-                chat_id: chatId,
-                message_id: statusMsgId
-            });
-        }
-    } catch (error) {
-        console.error(error);
-        await bot.editMessageText(`❌ تعذر الاتصال: ${error.response ? JSON.stringify(error.response.data) : error.message}`, {
-            chat_id: chatId,
-            message_id: statusMsgId
-        });
-    }
-}
-
-async function handleLanguageChoice(callbackQuery) {
-    const chatId = callbackQuery.message.chat.id;
-    const data = callbackQuery.data;
-    const url = pendingUrls[chatId];
-
-    if (!url) {
-        return bot.sendMessage(chatId, "⚠️ المرجو إرسال الرابط من جديد.");
+        session.lang = data === 'lang_ar' ? 'ar' : 'en';
+        await bot.sendMessage(chatId, "جاري تحضير طلب التلخيص وفاتورة الدفع...");
+        return requestSummary(chatId);
     }
 
-    const lang = data === "lang_ar" ? "ar" : "en";
-    delete pendingUrls[chatId];
-
-    await bot.answerCallbackQuery(callbackQuery.id);
-    const statusMsg = await bot.sendMessage(chatId, "📥 جاري تحضير طلب التلخيص وفاتورة الدفع...");
-
-    await requestSummary(chatId, url, lang, statusMsg.message_id);
-}
-
-async function handleNewSummaryButton(callbackQuery) {
-    const chatId = callbackQuery.message.chat.id;
-    await bot.answerCallbackQuery(callbackQuery.id);
-    await bot.sendMessage(chatId, "📎 صيفط ليا الرابط ديال المقال الجديد.");
+    if (data === 'check_payment') {
+        return requestSummary(chatId);
+    }
 }
 
 module.exports = async (req, res) => {
-  try {
-    if (req.body && req.body.message) {
-      await handleTelegramMessage(req.body.message);
-    } else if (req.body && req.body.callback_query) {
-      const data = req.body.callback_query.data;
-      if (data === "new_summary") {
-        await handleNewSummaryButton(req.body.callback_query);
-      } else {
-        await handleLanguageChoice(req.body.callback_query);
-      }
+    try {
+        if (req.body && req.body.message) {
+            await handleTelegramMessage(req.body.message);
+        } else if (req.body && req.body.callback_query) {
+            await handleCallbackQuery(req.body.callback_query);
+        }
+        res.status(200).send('OK');
+    } catch (error) {
+        console.error('Error handling webhook update:', error);
+        res.status(500).send('Internal Server Error');
     }
-    res.status(200).send('OK');
-  } catch (error) {
-    console.error('Error handling webhook update:', error);
-    res.status(500).send('Internal Server Error');
-  }
 };
