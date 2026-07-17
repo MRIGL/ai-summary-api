@@ -26,7 +26,7 @@ app.post('/api/app', async (req, res) => {
             const plainText = htmlContent.replace(/<[^>]*>/g, ' ').substring(0, 3000); 
 
             const aiResponse = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-                model: "llama3-8b-8192",
+                model: "llama-3.1-8b-instant",
                 messages: [
                     { role: "system", content: "Tu es un assistant IA. Résume ce texte de manière claire en 4 lignes maximum." },
                     { role: "user", content: plainText }
