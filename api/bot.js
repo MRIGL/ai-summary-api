@@ -84,10 +84,8 @@ async function requestSummary(chatId, url, lang, statusMsgId) {
 
             await bot.deleteMessage(chatId, statusMsgId);
             await bot.sendPhoto(chatId, qrCodeUrl, {
-                caption: "⚡ امسح هاد الـ QR code بمحفظة Lightning ديالك باش تخلص، ولا دوس مطول على النص تحت باش تنسخو:"
+                caption: "⚡ امسح هاد الـ QR code بمحفظة Lightning ديالك باش تخلص.\n\n🔄 ملي تخلص، عاود صيفط ليا نفس الرابط باش يعطيك التلخيص نيشان!"
             });
-            await bot.sendMessage(chatId, `\`${invoicePr}\``, { parse_mode: 'Markdown' });
-            await bot.sendMessage(chatId, "🔄 ملي تخلص، عاود صيفط ليا نفس الرابط باش يعطيك التلخيص نيشان!");
             return;
         }
 
