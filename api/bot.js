@@ -75,7 +75,17 @@ async function handleTelegramMessage(msg) {
     if (!text) return;
 
     if (text.startsWith('/start')) {
-        return bot.sendMessage(chatId, "مرحباً بك! صيفط ليا رابط ديال أي مقال وغادي نلخصو ليك ف الحين بالذكاء الاصطناعي.");
+        const welcomeMsg =
+            "👋 مرحباً بك!\n\n" +
+            "🤖 هاد البوت كيلخصلك أي مقال ولا خبر ولا نص بالذكاء الاصطناعي، ف 4 أسطر واضحين، بالعربية أو الإنجليزية.\n\n" +
+            "💰 الثمن: 0.01€ لكل تلخيص، خلاص عبر Bitcoin Lightning (سريع وآمن، من غير بطاقة بنكية).\n\n" +
+            "📌 كيفاش تخدم:\n" +
+            "1️⃣ صيفط ليا رابط المقال\n" +
+            "2️⃣ اختار اللغة\n" +
+            "3️⃣ خلص بمسح QR code\n" +
+            "4️⃣ خذ التلخيص ديالك ف ثواني ⚡\n\n" +
+            "جرب دابا: صيفط ليا رابط أي مقال 👇";
+        return bot.sendMessage(chatId, welcomeMsg);
     }
 
     const urlRegex = /^(https?:\/\/[^\s]+)/;
