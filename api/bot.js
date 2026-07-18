@@ -1,7 +1,7 @@
 const TelegramBot = require('node-telegram-bot-api').default;
 const axios = require('axios');
 
-// ⚠️ التوكن لازم يكون ف environment variable، ماشي مكتوب هنا مباشرة
+// ⚠️ Token must come from an environment variable, never hardcoded here
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const VERCEL_SERVER_URL = 'https://ai-summary-api-eta.vercel.app';
 
@@ -20,7 +20,7 @@ async function requestSummary(chatId) {
             { url: session.url, lang: session.lang },
             {
                 headers: { 'x-payment-token': session.invoiceId || '' },
-                // 🔑 بدون هاد، axios كيرمي 402 كـ error ومكيوصلش للفرع تاعو تحت
+                // 🔑 Without this, axios throws 402 as an error instead of letting us handle it below
                 validateStatus: (status) => status < 500
             }
         );
@@ -29,42 +29,42 @@ async function requestSummary(chatId) {
             const invoicePr = response.headers['x-invoice'] || response.data.paymentRequest;
             const invoiceId = response.headers['x-checking-id'] || response.data.invoiceId;
 
-            // إذا كانت هاي أول مرة (ماكانش عندنا invoiceId قبل)، عرض QR وطلب الدفع
+            // First time we see this invoice → show QR and payment request
             const isNewInvoice = !session.invoiceId;
             userSessions[chatId] = { ...session, invoiceId };
 
             if (isNewInvoice) {
                 const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(invoicePr)}`;
                 await bot.sendPhoto(chatId, qrCodeUrl, {
-                    caption: "⚡ امسح هاد الـ QR code بمحفظة Lightning ديالك باش تخلص، ولا دوس مطول على النص تحت باش تنسخو:"
+                    caption: "⚡ Scan this QR code with your Lightning wallet to pay, or long-press the text below to copy it:"
                 });
                 await bot.sendMessage(chatId, `\`${invoicePr}\``, { parse_mode: 'Markdown' });
-                await bot.sendMessage(chatId, "ملي تخلص، دوس زر ✅ تحقق من الدفع.", {
+                await bot.sendMessage(chatId, "Once you've paid, tap ✅ Check Payment.", {
                     reply_markup: {
-                        inline_keyboard: [[{ text: "✅ تحقق من الدفع", callback_data: "check_payment" }]]
+                        inline_keyboard: [[{ text: "✅ Check Payment", callback_data: "check_payment" }]]
                     }
                 });
             } else {
-                // كان عندنا فاتورة أصلاً وعاود جرب "تحقق" بس لسا ماخلصاتش
-                await bot.sendMessage(chatId, "الفاتورة مازالت ماخلصاتش. خلص الأول من محفظة Lightning ديالك، وبعدين دوس تحقق.", {
+                // We already had this invoice and the user tapped "check" again, but it's still unpaid
+                await bot.sendMessage(chatId, "This invoice hasn't been paid yet. Pay it with your Lightning wallet first, then check again.", {
                     reply_markup: {
-                        inline_keyboard: [[{ text: "✅ تحقق من الدفع", callback_data: "check_payment" }]]
+                        inline_keyboard: [[{ text: "✅ Check Payment", callback_data: "check_payment" }]]
                     }
                 });
             }
         } else if (response.status === 410) {
-            await bot.sendMessage(chatId, "الفاتورة صلاحيتها خلصات. صيفط الرابط ديال المقال مرة أخرى باش نديرو وحدة جديدة.");
+            await bot.sendMessage(chatId, "This invoice has expired. Send me the article link again to generate a new one.");
             delete userSessions[chatId];
         } else if (response.data && response.data.status === 'success') {
-            await bot.sendMessage(chatId, `التلخيص:\n\n${response.data.summary}`, { parse_mode: 'Markdown' });
+            await bot.sendMessage(chatId, `Summary:\n\n${response.data.summary}`, { parse_mode: 'Markdown' });
             delete userSessions[chatId];
         } else {
             console.log("FULL RESPONSE:", JSON.stringify(response.data));
-            await bot.sendMessage(chatId, `الحالة: ${response.status} - راجع الـ logs`);
+            await bot.sendMessage(chatId, `Status: ${response.status} - check the logs`);
         }
     } catch (error) {
         console.error(error);
-        await bot.sendMessage(chatId, "تعذر الاتصال بالسيرفر حالياً.");
+        await bot.sendMessage(chatId, "Couldn't reach the server right now. Please try again in a bit.");
     }
 }
 
@@ -76,31 +76,31 @@ async function handleTelegramMessage(msg) {
 
     if (text.startsWith('/start')) {
         const welcomeMsg =
-            "👋 مرحباً بك!\n\n" +
-            "🤖 هاد البوت كيلخصلك أي مقال ولا خبر ولا نص بالذكاء الاصطناعي، ف 4 أسطر واضحين، بالعربية أو الإنجليزية.\n\n" +
-            "💰 الثمن: 0.01€ لكل تلخيص، خلاص عبر Bitcoin Lightning (سريع وآمن، من غير بطاقة بنكية).\n\n" +
-            "📌 كيفاش تخدم:\n" +
-            "1️⃣ صيفط ليا رابط المقال\n" +
-            "2️⃣ اختار اللغة\n" +
-            "3️⃣ خلص بمسح QR code\n" +
-            "4️⃣ خذ التلخيص ديالك ف ثواني ⚡\n\n" +
-            "جرب دابا: صيفط ليا رابط أي مقال 👇";
+            "👋 Welcome!\n\n" +
+            "🤖 This bot summarizes any article, news piece, or text using AI, in 4 clear lines, in Arabic or English.\n\n" +
+            "💰 Price: €0.01 per summary, paid via Bitcoin Lightning (fast and secure, no bank card needed).\n\n" +
+            "📌 How it works:\n" +
+            "1️⃣ Send me the article link\n" +
+            "2️⃣ Choose a language\n" +
+            "3️⃣ Pay by scanning the QR code\n" +
+            "4️⃣ Get your summary in seconds ⚡\n\n" +
+            "Try it now: send me any article link 👇";
         return bot.sendMessage(chatId, welcomeMsg);
     }
 
     const urlRegex = /^(https?:\/\/[^\s]+)/;
     if (!urlRegex.test(text)) {
-        return bot.sendMessage(chatId, "المرجو إرسال رابط صحيح (URL) للمقال.");
+        return bot.sendMessage(chatId, "Please send a valid article URL.");
     }
 
-    // خزّن الرابط وسولو على اللغة (فاتورة جديدة كل مرة، بلا invoiceId قديم)
+    // Store the URL and ask for the summary language (fresh invoice each time, no stale invoiceId)
     userSessions[chatId] = { url: text, lang: null, invoiceId: null };
 
-    return bot.sendMessage(chatId, "بأي لغة بغيتي التلخيص؟", {
+    return bot.sendMessage(chatId, "Which language would you like the summary in?", {
         reply_markup: {
             inline_keyboard: [[
-                { text: "🇸🇦 العربية", callback_data: "lang_ar" },
-                { text: "🇬🇧 English", callback_data: "lang_en" }
+                { text: "🇬🇧 English", callback_data: "lang_en" },
+                { text: "🇸🇦 Arabic", callback_data: "lang_ar" }
             ]]
         }
     });
@@ -115,10 +115,10 @@ async function handleCallbackQuery(query) {
     if (data === 'lang_ar' || data === 'lang_en') {
         const session = userSessions[chatId];
         if (!session || !session.url) {
-            return bot.sendMessage(chatId, "صيفط ليا رابط المقال باش نبدأو.");
+            return bot.sendMessage(chatId, "Send me an article link to get started.");
         }
         session.lang = data === 'lang_ar' ? 'ar' : 'en';
-        await bot.sendMessage(chatId, "جاري تحضير طلب التلخيص وفاتورة الدفع...");
+        await bot.sendMessage(chatId, "Preparing your summary request and payment invoice...");
         return requestSummary(chatId);
     }
 
