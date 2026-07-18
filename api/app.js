@@ -4,9 +4,21 @@ const app = express();
 
 app.use(express.json());
 
+// دعم الـ CORS باش يسمح لأي روبوت أو تطبيق خارجي يتواصل مع الـ API
+app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-payment-token');
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
+    next();
+});
+
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const SWISS_API_KEY = process.env.SWISS_API_KEY;
 
+// المسار الرئيسي للـ API
 app.post('/api/app', async (req, res) => {
     const { url, lang } = req.body;
     const paymentToken = req.headers['x-payment-token'];
@@ -15,8 +27,7 @@ app.post('/api/app', async (req, res) => {
         return res.status(400).json({ error: "Veuillez fournir l'URL du site." });
     }
 
-    // 1) إذا كان عندنا invoiceId، نتحقق من حالته مباشرة عند Swiss Bitcoin Pay
-    //    (بدل الاعتماد على ذاكرة السيرفر أو webhook، اللي ممكن تنمسح أو ما توصلش)
+    // 1) حالة وجود x-payment-token ف الـ Headers (الروبوت رجع باش ياخد النتيجة)
     if (paymentToken) {
         try {
             const checkResponse = await axios.get(`https://api.swiss-bitcoin-pay.ch/checkout/${paymentToken}`);
@@ -27,11 +38,11 @@ app.post('/api/app', async (req, res) => {
             }
 
             if (invoice.isPaid) {
-                // الدفع مؤكد → ننفذ التلخيص
+                // الخلاص مؤكد 100% -> كنعطيو التلخيص ديريكت
                 return await performSummary(url, lang, res);
             }
 
-            // الفاتورة موجودة بس لسا ما انخلصتش
+            // الفاتورة كاينة ولكن مازال ما تخلصاتش
             return res.status(402).json({ error: "Invoice not paid yet.", invoiceId: paymentToken });
 
         } catch (err) {
@@ -41,7 +52,7 @@ app.post('/api/app', async (req, res) => {
         }
     }
 
-    // 2) ما في invoiceId أصلاً → ننشئ فاتورة جديدة
+    // 2) ما صيفطش الـ token أول مرة -> هنا كنفركعو عليه الـ 402 ونعطيو الفاتورة
     try {
         const swissResponse = await axios.post('https://api.swiss-bitcoin-pay.ch/checkout', {
             amount: 0.01,
@@ -55,12 +66,14 @@ app.post('/api/app', async (req, res) => {
         const invoiceId = swissResponse.data.id;
         const invoicePr = swissResponse.data.pr;
 
+        // وضع البيانات ف الـ Headers و الـ Body ف نفس الوقت باش نسهلو على الروبوت القراءة
         res.setHeader('X-Invoice', invoicePr);
         res.setHeader('X-Checking-Id', invoiceId);
+        
         return res.status(402).json({
             error: "Payment Required",
             message: "Pay the Lightning invoice to continue.",
-            invoiceId,
+            invoiceId: invoiceId,
             paymentRequest: invoicePr
         });
 
@@ -71,9 +84,7 @@ app.post('/api/app', async (req, res) => {
     }
 });
 
-// ------------------------------------------------------------------
-// تنفيذ التلخيص الفعلي (بعد التأكد من الدفع)
-// ------------------------------------------------------------------
+// تنفيذ التلخيص الفعلي عبر Groq
 async function performSummary(url, lang, res) {
     try {
         const webResponse = await axios.get(url, {
@@ -82,10 +93,9 @@ async function performSummary(url, lang, res) {
         const htmlContent = webResponse.data;
 
         const titleMatch = htmlContent.match(/<title[^>]*>([^<]+)<\/title>/i);
-        const pageTitle = titleMatch ? titleMatch[1].trim() : "بلا عنوان";
+        const pageTitle = titleMatch ? titleMatch[1].trim() : "Sans titre";
 
         const domain = new URL(url).hostname.replace('www.', '');
-
         const plainText = htmlContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 3000);
 
         const wordCount = plainText.split(/\s+/).length;
@@ -110,7 +120,7 @@ async function performSummary(url, lang, res) {
         const summaryWordCount = summary.split(/\s+/).length;
         const compressionRate = Math.round((1 - summaryWordCount / wordCount) * 100);
 
-        return res.json({
+        return res.status(200).json({
             status: "success",
             summary: summary,
             title: pageTitle,
